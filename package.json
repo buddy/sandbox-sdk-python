@@ -1,0 +1,13 @@
+{
+	"name": "buddy-sandbox-sdk-codegen",
+	"private": true,
+	"type": "module",
+	"description": "Model generation toolchain for buddy-sandbox-sdk. Not published.",
+	"scripts": {
+		"fetch:schemas": "openapi-python"
+	},
+	"packageManager": "pnpm@10.33.0",
+	"devDependencies": {
+		"@hey-api/openapi-python": "0.0.24"
+	}
+}
