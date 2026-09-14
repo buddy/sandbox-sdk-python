@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "buddy-sandbox-sdk"
+version = "0.1.0"
+description = "Python SDK for managing sandboxes through the Buddy API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Marcel Gańczarczyk", email = "marcel.ganczarczyk@buddy.works" }]
+keywords = ["sandbox", "api", "sdk", "ci", "cd", "devops", "cloud"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.28",
+    "pydantic>=2.11",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.2",
+    "pytest-xdist>=3.8",
+    "python-dotenv>=1.1",
+    "respx>=0.23",
+    "ruff>=0.14",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/buddy_sandbox"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["src/buddy_sandbox/api"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "ASYNC"]
+
+[tool.ruff.lint.pep8-naming]
+# hybridmethod binds its first argument to the class, like classmethod does.
+classmethod-decorators = ["buddy_sandbox.utils.hybrid.hybridmethod"]
+
+[tool.ruff.lint.per-file-ignores]
+# The patch templates reproduce generated code verbatim, one field per line.
+"scripts/cleanup_schemas.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "scripts", "tests", "examples"]
+
+[[tool.mypy.overrides]]
+module = "buddy_sandbox.api.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-m 'not integration'"
+markers = [
+    "integration: hits the live Buddy API and creates real sandboxes; run it with\n        -n 8 --dist loadfile, which keeps each file on one worker",
+]
