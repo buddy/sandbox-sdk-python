@@ -25,6 +25,7 @@ uv run python -m examples.ping         # one, on its own
 | `ping` | Streaming output, parallel commands, and fire-and-forget |
 | `list` | Listing the sandboxes in the current scope |
 | `lifecycle` | create → run → stop → start → restart → destroy |
+| `exec` | A command's exit code and output in one call, and when to use `run_command` instead |
 | `streaming` | Automatic streaming, and iterating the log stream yourself |
 | `filesystem` | Listing, creating, uploading, downloading and deleting |
 | `apps` | Long-running apps: starting, stopping and reading their logs |
