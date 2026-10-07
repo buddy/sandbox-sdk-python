@@ -31,9 +31,11 @@ from buddy_sandbox.api.openapi.pydantic_gen import (
     DeleteSnapshotPath,
     DeleteSnapshotResponse,
     DownloadSandboxContentPath,
+    ExecSandboxCommandBody,
+    ExecSandboxCommandPath,
+    ExecSandboxCommandResponse,
     ExecuteSandboxCommandBody,
     ExecuteSandboxCommandPath,
-    ExecuteSandboxCommandResponse,
     GetIdentifiersPath,
     GetIdentifiersQuery,
     GetIdentifiersResponse,
@@ -98,6 +100,9 @@ from buddy_sandbox.utils.logger import logger
 SandboxScope = Literal["PROJECT", "ENVIRONMENT", "WORKSPACE"]
 
 PATH_PLACEHOLDER: Final = re.compile(r"\{(\w+)\}")
+
+#: The API fails a synchronous command at 60s - outlast it, barely.
+EXEC_TIMEOUT_MS: Final = 65_000
 
 T = TypeVar("T")
 
@@ -331,6 +336,7 @@ class BuddyApiClient(HttpClient):
         skip_retry: bool = False,
         skip_scope: bool = False,
         idempotent: bool = True,
+        timeout_ms: float | None = None,
     ) -> T:
         """Execute an HTTP request with input and output validation."""
         validated_path = path_model.model_validate(
@@ -356,6 +362,7 @@ class BuddyApiClient(HttpClient):
             "query_params": validated_query,
             "skip_retry": skip_retry,
             "idempotent": idempotent,
+            "timeout_ms": timeout_ms,
         }
 
         if method == "GET":
@@ -529,10 +536,12 @@ class BuddyApiClient(HttpClient):
     # Commands
     # ------------------------------------------------------------------
 
-    async def execute_command(
-        self, *, path: Mapping[str, Any], body: Any
-    ) -> SandboxCommandView | SandboxCommandResultView:
-        """Execute a command in a sandbox."""
+    async def execute_command(self, *, path: Mapping[str, Any], body: Any) -> SandboxCommandView:
+        """Execute a command in a sandbox, returning once it has been accepted.
+
+        The endpoint can also answer with a finished result, but only for the
+        ``fast`` query param this method never sends - ``exec_command`` covers that.
+        """
         return await self._request_with_validation(
             method="POST",
             url="/workspaces/{workspace_domain}/sandboxes/{sandbox_id}/commands",
@@ -541,7 +550,28 @@ class BuddyApiClient(HttpClient):
             idempotent=False,
             body_model=ExecuteSandboxCommandBody,
             path_model=ExecuteSandboxCommandPath,
-            response_model=ExecuteSandboxCommandResponse,
+            response_model=GetSandboxCommandResponse,
+        )
+
+    async def exec_command(
+        self, *, path: Mapping[str, Any], body: Any, timeout_ms: float | None = None
+    ) -> SandboxCommandResultView:
+        """Run a command in a sandbox and wait for its result.
+
+        The request stays open for as long as the command runs, so it outlasts
+        the API's own 60 second ceiling by default rather than the client-wide
+        timeout.
+        """
+        return await self._request_with_validation(
+            method="POST",
+            url="/workspaces/{workspace_domain}/sandboxes/{sandbox_id}/exec",
+            path=path,
+            body=body,
+            idempotent=False,
+            body_model=ExecSandboxCommandBody,
+            path_model=ExecSandboxCommandPath,
+            response_model=ExecSandboxCommandResponse,
+            timeout_ms=timeout_ms if timeout_ms is not None else EXEC_TIMEOUT_MS,
         )
 
     async def get_sandbox_commands(self, *, path: Mapping[str, Any]) -> SandboxCommandsView:

@@ -7,17 +7,11 @@ from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from typing import TYPE_CHECKING, Literal
 
-from buddy_sandbox.api.openapi.pydantic_gen import (
-    SandboxCommandLog,
-    SandboxCommandResultView,
-    SandboxCommandView,
-)
+from buddy_sandbox.api.openapi.pydantic_gen import SandboxCommandLog, SandboxCommandView
 from buddy_sandbox.utils.poll import poll_until, resolve_poll_interval
 
 if TYPE_CHECKING:
     from buddy_sandbox.core.buddy_api_client import BuddyApiClient
-
-CommandResponse = SandboxCommandView | SandboxCommandResultView
 
 Stream = Literal["STDOUT", "STDERR", "BOTH"]
 
@@ -28,19 +22,17 @@ class Command:
     def __init__(
         self,
         *,
-        command_response: CommandResponse,
+        command_response: SandboxCommandView,
         client: BuddyApiClient,
         sandbox_id: str,
     ) -> None:
-        if not isinstance(command_response, SandboxCommandView) or not command_response.id:
+        if not command_response.id:
             raise ValueError("Command response must have an id")
-
-        command_id = command_response.id
 
         self._command_response = command_response
         self._client = client
         self._sandbox_id = sandbox_id
-        self._command_id: str = command_id
+        self._command_id: str = command_response.id
         # An async task holds only a weak reference, so a detached run's log
         # pump has to be kept alive by the command it belongs to.
         self._stream_task: asyncio.Task[None] | None = None

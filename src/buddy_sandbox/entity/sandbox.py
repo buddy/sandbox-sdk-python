@@ -19,6 +19,7 @@ from buddy_sandbox.api.openapi.pydantic_gen import (
     CreateNewSandboxRequestWritable,
     ExecuteSandboxCommandRequest,
     SandboxAppLogsView,
+    SandboxCommandResultView,
     SandboxIdView,
     SandboxResponse,
     ShortSnapshotView,
@@ -327,6 +328,34 @@ class Sandbox:
     # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
+
+    async def exec(
+        self, *, command: str, timeout_ms: float | None = None, **request: Any
+    ) -> SandboxCommandResultView:
+        """Run a command in the sandbox and wait for it to finish.
+
+        Returns the exit code and the output it produced, with no polling and no
+        log stream in between. The command leaves no trace in the sandbox's
+        command history, streams no logs and cannot be terminated, and the API
+        fails it after 60 seconds. Use :meth:`run_command` for anything longer,
+        to follow the output as it arrives, or to leave a command running
+        detached.
+
+        ``timeout_ms`` defaults to just past that 60 second ceiling, so the API
+        decides the outcome rather than the client giving up first.
+        """
+        sandbox_id = self.initialized_id
+
+        async with error_handler("Failed to execute command"):
+            _check_fields(ExecuteSandboxCommandRequest, request, frozenset({"command"}))
+
+            logger.debug(f"Executing command: $ {command}")
+
+            return await self._client.exec_command(
+                path={"sandbox_id": sandbox_id},
+                body={"command": command, **request},
+                timeout_ms=timeout_ms,
+            )
 
     async def run_command(
         self,

@@ -228,10 +228,15 @@ class HttpClient:
         query_params: Mapping[str, QueryValue] | None = None,
         headers: Mapping[str, str] | None = None,
         response_type: Literal["json", "text"] = "json",
+        timeout_ms: float | None = None,
     ) -> HttpResponse:
-        """Execute an HTTP request with timeout, retry and error handling."""
+        """Execute an HTTP request with timeout, retry and error handling.
+
+        ``timeout_ms`` overrides the client-wide timeout for this request only.
+        """
         full_url = self._build_url(url, query_params)
         request_headers = self._get_headers(headers)
+        deadline_ms = timeout_ms if timeout_ms is not None else self._timeout_ms
 
         async def make_request() -> HttpResponse:
             try:
@@ -253,7 +258,7 @@ class HttpClient:
 
                 content = json.dumps(data).encode() if data is not None else None
 
-                async with asyncio.timeout(self._timeout_ms / 1000):
+                async with asyncio.timeout(deadline_ms / 1000):
                     response = await self._http.request(
                         method, full_url, headers=request_headers, content=content
                     )
