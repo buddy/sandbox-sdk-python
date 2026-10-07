@@ -151,9 +151,33 @@ await sandbox.wait_until_running(500)  # check every 500ms
 
 ## Commands
 
-`run_command()` blocks until the command finishes, streaming its output to
-`sys.stdout` and `sys.stderr` as it arrives. Pass `stdout=None` / `stderr=None`
-to silence it, or `detached=True` to get the `Command` back immediately.
+`exec()` runs a command and returns when it finishes, with its exit code and
+output:
+
+```python
+result = await sandbox.exec(command="npm test")
+
+print(result.exit_code, result.stdout, result.stderr)
+```
+
+A command that exits non-zero still returns, so check `exit_code`.
+
+`runtime` picks the interpreter. It defaults to `BASH`, and also takes
+`JAVASCRIPT`, `TYPESCRIPT` or `PYTHON`:
+
+```python
+await sandbox.exec(command="print(1 + 1)", runtime="PYTHON")
+```
+
+The request stays open while the command runs, and the API fails it after 60
+seconds. Whatever it does, a command run this way leaves no entry in the sandbox
+command history, streams no logs, and cannot be terminated.
+
+Use `run_command()` for anything longer than a minute, to follow the output as
+it arrives, or to leave a command running after the call returns. It blocks
+until the command finishes, streaming its output to `sys.stdout` and
+`sys.stderr` as it arrives. Pass `stdout=None` / `stderr=None` to silence it, or
+`detached=True` to get the `Command` back immediately.
 
 ```python
 command = await sandbox.run_command(command="pytest -q", stdout=None, stderr=None)
