@@ -6,7 +6,6 @@ either the API or the rest of this package:
 * generated enum classes are unusable here - the sandbox ``resources`` values
   ("1x2", "2x4", ...) become identifiers starting with a digit, so the module
   does not even compile,
-* environment IDs are hashid strings typed as int32,
 * ``POST /sandboxes`` accepts ``scope``/``environment`` in the body while
   documenting three records declaring neither,
 * the create-sandbox body union must be matched in declaration order, or
@@ -49,8 +48,6 @@ CREATE_BODY_MODELS = (
     "CreateFromSnapshotRequestWritable",
     "CreateNewSandboxRequestWritable",
 )
-
-HASHID_MODELS = ("ShortEnvironmentView", "ShortEnvironmentViewWritable")
 
 BLOCK_SEPARATOR = "\n\n\n"
 
@@ -201,23 +198,7 @@ def main() -> None:
     content = defer_annotations(content)
     content = enums_to_literals(content)
 
-    # Patch 1: hashid strings typed as int32 - unpatched, response validation
-    # rejects every environment-scoped sandbox.
-    for name in HASHID_MODELS:
-        content = patch_block(
-            content,
-            class_block(name),
-            lambda block: re.sub(
-                r"^    id: Optional\[int\] = Field\(",
-                "    id: Optional[str] = Field(",
-                block,
-                count=1,
-                flags=re.MULTILINE,
-            ),
-            f"{name}.id should be a string (hashid), not an int",
-        )
-
-    # Patch 2: the create body really does take scope/environment. Unpatched,
+    # Patch 1: the create body really does take scope/environment. Unpatched,
     # our own request validation strips them before the call leaves the process.
     anchor = content.index("class ")
     content = content[:anchor] + ENVIRONMENT_REF + content[anchor:]
@@ -234,7 +215,7 @@ def main() -> None:
             f"{name} is missing scope/environment",
         )
 
-    # Patch 3: pydantic's smart union would let CreateNewSandboxRequestWritable
+    # Patch 2: pydantic's smart union would let CreateNewSandboxRequestWritable
     # absorb a restore body and silently drop snapshot_id, turning a restore
     # into a blank sandbox.
     content = patch_block(

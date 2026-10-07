@@ -30,9 +30,13 @@ __all__ = [
     "AddSnapshotRequest",
     "AddVariableInObjectRequest",
     "AddVariableInObjectRequestFilePlace",
+    "AddVariableInObjectRequestPipelinesAccessLevel",
+    "AddVariableInObjectRequestSandboxesAccessLevel",
     "AddVariableInObjectRequestType",
     "AddVariableInObjectRequestWritable",
     "AddVariableInObjectRequestWritableFilePlace",
+    "AddVariableInObjectRequestWritablePipelinesAccessLevel",
+    "AddVariableInObjectRequestWritableSandboxesAccessLevel",
     "AddVariableInObjectRequestWritableType",
     "AddWorkspaceMemberBody",
     "AddWorkspaceMemberPath",
@@ -75,6 +79,9 @@ __all__ = [
     "EnvironmentVariableView",
     "EnvironmentVariableViewFilePlace",
     "EnvironmentVariableViewType",
+    "ExecSandboxCommandBody",
+    "ExecSandboxCommandPath",
+    "ExecSandboxCommandResponse",
     "ExecuteSandboxCommandBody",
     "ExecuteSandboxCommandPath",
     "ExecuteSandboxCommandQuery",
@@ -102,6 +109,7 @@ __all__ = [
     "GetSandboxCommandPath",
     "GetSandboxCommandResponse",
     "GetSandboxCommandsPath",
+    "GetSandboxCommandsQuery",
     "GetSandboxCommandsResponse",
     "GetSandboxContentPath",
     "GetSandboxContentResponse",
@@ -188,6 +196,8 @@ __all__ = [
     "ProjectViewWritableAccess",
     "ProjectsView",
     "ProjectsViewWritable",
+    "RecreateSandboxPath",
+    "RecreateSandboxResponse",
     "RestartSandboxPath",
     "RestartSandboxResponse",
     "RoleAssumptionView",
@@ -326,6 +336,10 @@ __all__ = [
     "TargetPostgresqlViewWritable",
     "TargetRdsMssqlView",
     "TargetRdsMssqlViewWritable",
+    "TargetRdsMysqlView",
+    "TargetRdsMysqlViewWritable",
+    "TargetRdsPostgresqlView",
+    "TargetRdsPostgresqlViewWritable",
     "TargetSshView",
     "TargetSshViewWritable",
     "TargetUpcloudView",
@@ -457,23 +471,25 @@ class AllowedSandboxView(BaseModel):
     )
 
 
-ShortEnvironmentViewScope: TypeAlias = Literal["PROJECT", "WORKSPACE", "ANY"]
+ShortEnvironmentViewScope: TypeAlias = Literal["PROJECT", "WORKSPACE"]
 
 
 class ShortEnvironmentView(BaseModel):
-    """Short representation of an environment object"""
-
     url: Optional[str] = Field(default=None, description="API endpoint to GET this object")
     html_url: Optional[str] = Field(
         default=None, description="Web URL to view this object in Buddy.works"
     )
+    id: Optional[str] = Field(default=None, description="The ID of the environment")
     name: Optional[str] = Field(default=None, description="The name of the environment")
     identifier: Optional[str] = Field(
-        default=None, description="The human-readable identifier of the environment"
+        default=None,
+        description="A human-readable ID of the environment. Alphanumeric characters, underscores, and hyphens (hyphens cannot appear at the start or end).",
     )
-    id: Optional[str] = Field(default=None, description="The ID of the environment")
+    tags: Optional[list[str]] = Field(
+        default=None, description="The list of tags associated with the environment"
+    )
     scope: Optional[ShortEnvironmentViewScope] = Field(
-        default=None, description="The scope level of the environment"
+        default=None, description="The scope of the environment"
     )
 
 
@@ -804,6 +820,7 @@ class MemberView(BaseModel):
     )
     id: Optional[int] = Field(default=None, description="The ID of the user")
     name: Optional[str] = Field(default=None, description="The name of the user")
+    username: Optional[str] = Field(default=None, description="The unique username of the user")
     avatar_url: Optional[str] = Field(default=None, description="The avatar URL of the user")
     email: Optional[str] = Field(default=None, description="The email address of the user")
     admin: Optional[bool] = Field(default=None, description="Whether the user has admin privileges")
@@ -813,7 +830,14 @@ class MemberView(BaseModel):
 
 
 EnvironmentVariableViewType: TypeAlias = Literal[
-    "VAR", "FILE", "SSH_KEY", "IOS_KEYCHAIN", "IOS_PROVISION_PROFILES", "SSH_PUBLIC_KEY", "GPG_KEY"
+    "VAR",
+    "FILE",
+    "SSH_KEY",
+    "IOS_KEYCHAIN",
+    "IOS_PROVISION_PROFILES",
+    "SSH_PUBLIC_KEY",
+    "GPG_KEY",
+    "P12",
 ]
 
 
@@ -821,11 +845,13 @@ EnvironmentVariableViewFilePlace: TypeAlias = Literal["NONE", "CONTAINER"]
 
 
 class EnvironmentVariableView(BaseModel):
+    """The list of variables you can use the action"""
+
     id: Optional[int] = Field(default=None, description="The ID of the variable")
     key: Optional[str] = Field(default=None, description="The name of the variable")
     value: Optional[str] = Field(default=None, description="The value of the variable")
     type: Optional[EnvironmentVariableViewType] = Field(
-        default=None, description="The type of the added variable"
+        default=None, description="The type of the added variable. Defaults to `VAR` when not set"
     )
     encrypted: Optional[bool] = Field(
         default=None, description="If set to `true` the variable value will be encrypted and hidden"
@@ -835,21 +861,21 @@ class EnvironmentVariableView(BaseModel):
     )
     run_only_settable: Optional[bool] = Field(
         default=None,
-        description="Available only if `type=VAR`. If set to `true` the variable value can be set by Buddy actions only for execution time",
+        description="Available only if `type=VAR`. Requires `settable=true`. If set to `true` the variable value can be set by Buddy actions only for execution time",
     )
     init_path: Optional[str] = Field(default=None, description="Initial path for the variable")
     defaults: Optional[str] = Field(default=None, description="Default value for the variable")
     file_path: Optional[str] = Field(
         default=None,
-        description="Specifies where to copy the file on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="Specifies where to copy the file on each run. Required if `file_place` is `CONTAINER`, and must start with `/` or `~`",
     )
     file_chmod: Optional[str] = Field(
         default=None,
-        description="File permission set on copy to a container on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="File permission set on copy to a container on each run. Required if `file_place` is `CONTAINER`",
     )
     file_place: Optional[EnvironmentVariableViewFilePlace] = Field(
         default=None,
-        description="Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run",
+        description="Required if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`, unless the variable is sandbox-scoped. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run and both `file_path` and `file_chmod` are required",
     )
     binary: Optional[bool] = Field(default=None, description="Whether the file is binary")
     public_value: Optional[str] = Field(
@@ -971,6 +997,7 @@ IntegrationIdViewType: TypeAlias = Literal[
     "OPENCODE",
     "CLICKUP",
     "GROK",
+    "TYPESAFE",
 ]
 
 
@@ -1090,10 +1117,11 @@ class ProjectView(BaseModel):
     )
     external_project_id: Optional[str] = Field(
         default=None,
-        description="Repo slug of the Bitbucket, GitHub or GitLab project. Required when adding the integrated project",
+        description="Repo slug of the Bitbucket, GitHub or GitLab project the project is synchronized with; null for Buddy and custom repository projects",
     )
     git_lab_project_id: Optional[int] = Field(
-        default=None, description="ID of the project in GitLab"
+        default=None,
+        description="ID of the project in GitLab. If unset, it is resolved from `external_project_id`. If set, it must point to the same GitLab project as `external_project_id`",
     )
     custom_repo_url: Optional[str] = Field(
         default=None,
@@ -1109,7 +1137,7 @@ class ProjectView(BaseModel):
     )
     custom_repo_ssh_key_id: Optional[int] = Field(
         default=None,
-        description="The ID of the private SSH key used to authorize access to the git repository. Required when adding the project integrated with private git server by SSH url",
+        description="The ID of the private SSH key used to authorize access to the git repository. Used when adding the project integrated with private git server by SSH url. If unset, the workspace SSH key is used",
     )
     created_by: Optional[MemberView] = None
     http_repository: Optional[str] = Field(default=None, description="The HTTP repository URL")
@@ -1232,8 +1260,45 @@ class TunnelView(BaseModel):
 AddVariableInObjectRequestFilePlace: TypeAlias = Literal["NONE", "CONTAINER"]
 
 
+AddVariableInObjectRequestPipelinesAccessLevel: TypeAlias = Literal[
+    "DENIED",
+    "READ_ONLY",
+    "USE_ONLY",
+    "BLIND",
+    "RUN_ONLY",
+    "READ_WRITE",
+    "MANAGE",
+    "DEFAULT",
+    "ALLOWED",
+    "STAGE",
+    "COMMIT",
+]
+
+
+AddVariableInObjectRequestSandboxesAccessLevel: TypeAlias = Literal[
+    "DENIED",
+    "READ_ONLY",
+    "USE_ONLY",
+    "BLIND",
+    "RUN_ONLY",
+    "READ_WRITE",
+    "MANAGE",
+    "DEFAULT",
+    "ALLOWED",
+    "STAGE",
+    "COMMIT",
+]
+
+
 AddVariableInObjectRequestType: TypeAlias = Literal[
-    "VAR", "FILE", "SSH_KEY", "IOS_KEYCHAIN", "IOS_PROVISION_PROFILES", "SSH_PUBLIC_KEY", "GPG_KEY"
+    "VAR",
+    "FILE",
+    "SSH_KEY",
+    "IOS_KEYCHAIN",
+    "IOS_PROVISION_PROFILES",
+    "SSH_PUBLIC_KEY",
+    "GPG_KEY",
+    "P12",
 ]
 
 
@@ -1251,7 +1316,7 @@ class AddVariableInObjectRequest(BaseModel):
     )
     run_only_settable: Optional[bool] = Field(
         default=None,
-        description="Available only if `type=VAR`. If set to `true` the variable value can be set by Buddy actions only for execution time",
+        description="Available only if `type=VAR`. Requires `settable=true`. If set to `true` the variable value can be set by Buddy actions only for execution time",
     )
     encrypted: Optional[bool] = Field(
         default=None, description="If set to `true` the variable value will be encrypted and hidden"
@@ -1260,15 +1325,15 @@ class AddVariableInObjectRequest(BaseModel):
     defaults: Optional[str] = Field(default=None, description="Default value for the variable")
     file_path: Optional[str] = Field(
         default=None,
-        description="Specifies where to copy the file on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="Specifies where to copy the file on each run. Required if `file_place` is `CONTAINER`, and must start with `/` or `~`",
     )
     file_chmod: Optional[str] = Field(
         default=None,
-        description="File permission set on copy to a container on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="File permission set on copy to a container on each run. Required if `file_place` is `CONTAINER`",
     )
     file_place: Optional[AddVariableInObjectRequestFilePlace] = Field(
         default=None,
-        description="Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run",
+        description="Required if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`, unless the variable is sandbox-scoped. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run and both `file_path` and `file_chmod` are required",
     )
     password: Optional[str] = Field(default=None, description="Password for certificates")
     passphrase: Optional[str] = Field(default=None, description="Passphrase for encrypted SSH keys")
@@ -1280,11 +1345,29 @@ class AddVariableInObjectRequest(BaseModel):
         default=None,
         description="Set to `true` to disable the variable. Disabled variables are not injected anywhere",
     )
+    pipelines_access_level: Optional[AddVariableInObjectRequestPipelinesAccessLevel] = Field(
+        default=None,
+        description="Default access level for pipelines when no rule in `allowedPipelines` matches. Default: `USE_ONLY`. Only valid for workspace- and project-scoped variables.",
+    )
+    sandboxes_access_level: Optional[AddVariableInObjectRequestSandboxesAccessLevel] = Field(
+        default=None,
+        description="Default access level for sandboxes when no rule in `allowedSandboxes` matches. Default: `DENIED`. Only valid for workspace- and project-scoped variables.",
+    )
+    allowed_pipelines: Optional[list[AllowedPipelineView]] = Field(
+        default=None,
+        description="Rules that allow or deny access to this variable from specific pipelines or actions. Send an empty array to clear all rules.",
+    )
+    allowed_sandboxes: Optional[list[AllowedSandboxView]] = Field(
+        default=None,
+        description="Rules that allow or deny access to this variable from specific sandboxes. Send an empty array to clear all rules.",
+    )
     note: Optional[str] = Field(default=None, description="Note for this resource")
     agent_note: Optional[str] = Field(
         default=None, description="YAML note for AI agents operating on this resource"
     )
-    type: AddVariableInObjectRequestType = Field(..., description="The type of the added variable")
+    type: AddVariableInObjectRequestType = Field(
+        ..., description="The type of the added variable. Defaults to `VAR` when not set"
+    )
 
 
 class ProjectsView(BaseModel):
@@ -1383,6 +1466,7 @@ class SandboxResponse(BaseModel):
     agent_note: Optional[str] = Field(
         default=None, description="YAML note for AI agents operating on this resource"
     )
+    create_date: Optional[datetime] = Field(default=None, description="Sandbox creation date")
     variables: Optional[list[EnvironmentVariableView]] = Field(
         default=None, description="The environment variables of the sandbox"
     )
@@ -1435,6 +1519,10 @@ class CreateFromSnapshotRequest(BaseModel):
     resources: Optional[CreateFromSnapshotRequestResources] = Field(
         default=None, description="The resource configuration of the sandbox (CPU x RAM)"
     )
+    timeout: Optional[int] = Field(
+        default=None,
+        description="The timeout in seconds after which the sandbox will be automatically stopped",
+    )
     first_boot_commands: Optional[str] = Field(
         default=None, description="The commands to run during first boot of the sandbox"
     )
@@ -1450,7 +1538,7 @@ class CreateFromSnapshotRequest(BaseModel):
     endpoints: Optional[list[TunnelView]] = Field(
         default=None, description="The tunnel endpoints of the sandbox"
     )
-    variables: Optional[list[EnvironmentVariableView]] = Field(
+    variables: Optional[list[AddVariableInObjectRequest]] = Field(
         default=None, description="The environment variables of the sandbox"
     )
 
@@ -1565,35 +1653,6 @@ class SandboxContentItem(BaseModel):
     size: Optional[int] = Field(default=None, description="The size of the file in bytes")
 
 
-SandboxCommandViewRuntime: TypeAlias = Literal["BASH", "JAVASCRIPT", "TYPESCRIPT", "PYTHON"]
-
-
-SandboxCommandViewStatus: TypeAlias = Literal["INPROGRESS", "SUCCESSFUL", "FAILED"]
-
-
-class SandboxCommandView(BaseModel):
-    url: Optional[str] = Field(default=None, description="API endpoint to GET this object")
-    html_url: Optional[str] = Field(
-        default=None, description="Web URL to view this object in Buddy.works"
-    )
-    id: Optional[str] = Field(default=None, description="The ID of the command")
-    command: Optional[str] = Field(default=None, description="Command to execute in the sandbox")
-    runtime: Optional[SandboxCommandViewRuntime] = Field(
-        default=None, description="Runtime environment for command execution (default: `BASH`)"
-    )
-    status: Optional[SandboxCommandViewStatus] = Field(
-        default=None, description="Command execution status"
-    )
-    exit_code: Optional[int] = Field(default=None, description="Command exit code")
-    start_date: Optional[datetime] = Field(default=None, description="Command execution start date")
-    finish_date: Optional[datetime] = Field(
-        default=None, description="Command execution finish date"
-    )
-    logs_url: Optional[str] = Field(
-        default=None, description="API endpoint URL to retrieve logs for this command"
-    )
-
-
 SandboxCommandResultViewRuntime: TypeAlias = Literal["BASH", "JAVASCRIPT", "TYPESCRIPT", "PYTHON"]
 
 
@@ -1620,6 +1679,35 @@ class ExecuteSandboxCommandRequest(BaseModel):
     command: str = Field(..., description="Command to execute in the sandbox")
     runtime: Optional[ExecuteSandboxCommandRequestRuntime] = Field(
         default=None, description="Runtime environment for command execution (default: `BASH`)"
+    )
+
+
+SandboxCommandViewRuntime: TypeAlias = Literal["BASH", "JAVASCRIPT", "TYPESCRIPT", "PYTHON"]
+
+
+SandboxCommandViewStatus: TypeAlias = Literal["INPROGRESS", "SUCCESSFUL", "FAILED"]
+
+
+class SandboxCommandView(BaseModel):
+    url: Optional[str] = Field(default=None, description="API endpoint to GET this object")
+    html_url: Optional[str] = Field(
+        default=None, description="Web URL to view this object in Buddy.works"
+    )
+    id: Optional[str] = Field(default=None, description="The ID of the command")
+    command: Optional[str] = Field(default=None, description="Command to execute in the sandbox")
+    runtime: Optional[SandboxCommandViewRuntime] = Field(
+        default=None, description="Runtime environment for command execution (default: `BASH`)"
+    )
+    status: Optional[SandboxCommandViewStatus] = Field(
+        default=None, description="Command execution status"
+    )
+    exit_code: Optional[int] = Field(default=None, description="Command exit code")
+    start_date: Optional[datetime] = Field(default=None, description="Command execution start date")
+    finish_date: Optional[datetime] = Field(
+        default=None, description="Command execution finish date"
+    )
+    logs_url: Optional[str] = Field(
+        default=None, description="API endpoint URL to retrieve logs for this command"
     )
 
 
@@ -1884,6 +1972,7 @@ AddIntegrationRequestType: TypeAlias = Literal[
     "OPENCODE",
     "CLICKUP",
     "GROK",
+    "TYPESAFE",
 ]
 
 
@@ -2010,6 +2099,9 @@ class AddIntegrationRequest(BaseModel):
         default=None,
         description="The human-readable ID of the project (required when scope is `PROJECT`)",
     )
+    environment_id: Optional[int] = Field(
+        default=None, description="The ID of the environment (required when scope is `ENVIRONMENT`)"
+    )
 
 
 class WorkspaceMemberView(BaseModel):
@@ -2019,6 +2111,7 @@ class WorkspaceMemberView(BaseModel):
     )
     id: Optional[int] = Field(default=None, description="The ID of the user")
     name: Optional[str] = Field(default=None, description="The name of the user")
+    username: Optional[str] = Field(default=None, description="The unique username of the user")
     avatar_url: Optional[str] = Field(default=None, description="The avatar URL of the user")
     email: Optional[str] = Field(default=None, description="The email address of the user")
     admin: Optional[bool] = Field(default=None, description="Whether the user has admin privileges")
@@ -2082,6 +2175,9 @@ class IdsView(BaseModel):
     route_id: Optional[str] = Field(default=None, description="The ID of the route")
     agent_id: Optional[str] = Field(default=None, description="The ID of the tunnel agent")
     tunnel_id: Optional[str] = Field(default=None, description="The ID of the tunnel")
+    integration_id: Optional[str] = Field(
+        default=None, description="The hash ID of the integration"
+    )
 
 
 SsoViewType: TypeAlias = Literal["SAML", "OIDC"]
@@ -2369,19 +2465,21 @@ class UpdateWorkspaceMemberRequest(BaseModel):
     )
 
 
-ShortEnvironmentViewWritableScope: TypeAlias = Literal["PROJECT", "WORKSPACE", "ANY"]
+ShortEnvironmentViewWritableScope: TypeAlias = Literal["PROJECT", "WORKSPACE"]
 
 
 class ShortEnvironmentViewWritable(BaseModel):
-    """Short representation of an environment object"""
-
+    id: Optional[str] = Field(default=None, description="The ID of the environment")
     name: Optional[str] = Field(default=None, description="The name of the environment")
     identifier: Optional[str] = Field(
-        default=None, description="The human-readable identifier of the environment"
+        default=None,
+        description="A human-readable ID of the environment. Alphanumeric characters, underscores, and hyphens (hyphens cannot appear at the start or end).",
     )
-    id: Optional[str] = Field(default=None, description="The ID of the environment")
+    tags: Optional[list[str]] = Field(
+        default=None, description="The list of tags associated with the environment"
+    )
     scope: Optional[ShortEnvironmentViewWritableScope] = Field(
-        default=None, description="The scope level of the environment"
+        default=None, description="The scope of the environment"
     )
 
 
@@ -2407,6 +2505,7 @@ class MemberViewWritable(BaseModel):
 
     id: Optional[int] = Field(default=None, description="The ID of the user")
     name: Optional[str] = Field(default=None, description="The name of the user")
+    username: Optional[str] = Field(default=None, description="The unique username of the user")
     avatar_url: Optional[str] = Field(default=None, description="The avatar URL of the user")
     email: Optional[str] = Field(default=None, description="The email address of the user")
     admin: Optional[bool] = Field(default=None, description="Whether the user has admin privileges")
@@ -2511,6 +2610,7 @@ IntegrationIdViewWritableType: TypeAlias = Literal[
     "OPENCODE",
     "CLICKUP",
     "GROK",
+    "TYPESAFE",
 ]
 
 
@@ -2575,10 +2675,11 @@ class ProjectViewWritable(BaseModel):
     )
     external_project_id: Optional[str] = Field(
         default=None,
-        description="Repo slug of the Bitbucket, GitHub or GitLab project. Required when adding the integrated project",
+        description="Repo slug of the Bitbucket, GitHub or GitLab project the project is synchronized with; null for Buddy and custom repository projects",
     )
     git_lab_project_id: Optional[int] = Field(
-        default=None, description="ID of the project in GitLab"
+        default=None,
+        description="ID of the project in GitLab. If unset, it is resolved from `external_project_id`. If set, it must point to the same GitLab project as `external_project_id`",
     )
     custom_repo_url: Optional[str] = Field(
         default=None,
@@ -2594,7 +2695,7 @@ class ProjectViewWritable(BaseModel):
     )
     custom_repo_ssh_key_id: Optional[int] = Field(
         default=None,
-        description="The ID of the private SSH key used to authorize access to the git repository. Required when adding the project integrated with private git server by SSH url",
+        description="The ID of the private SSH key used to authorize access to the git repository. Used when adding the project integrated with private git server by SSH url. If unset, the workspace SSH key is used",
     )
     created_by: Optional[MemberViewWritable] = None
     http_repository: Optional[str] = Field(default=None, description="The HTTP repository URL")
@@ -2675,8 +2776,45 @@ class TunnelViewWritable(BaseModel):
 AddVariableInObjectRequestWritableFilePlace: TypeAlias = Literal["NONE", "CONTAINER"]
 
 
+AddVariableInObjectRequestWritablePipelinesAccessLevel: TypeAlias = Literal[
+    "DENIED",
+    "READ_ONLY",
+    "USE_ONLY",
+    "BLIND",
+    "RUN_ONLY",
+    "READ_WRITE",
+    "MANAGE",
+    "DEFAULT",
+    "ALLOWED",
+    "STAGE",
+    "COMMIT",
+]
+
+
+AddVariableInObjectRequestWritableSandboxesAccessLevel: TypeAlias = Literal[
+    "DENIED",
+    "READ_ONLY",
+    "USE_ONLY",
+    "BLIND",
+    "RUN_ONLY",
+    "READ_WRITE",
+    "MANAGE",
+    "DEFAULT",
+    "ALLOWED",
+    "STAGE",
+    "COMMIT",
+]
+
+
 AddVariableInObjectRequestWritableType: TypeAlias = Literal[
-    "VAR", "FILE", "SSH_KEY", "IOS_KEYCHAIN", "IOS_PROVISION_PROFILES", "SSH_PUBLIC_KEY", "GPG_KEY"
+    "VAR",
+    "FILE",
+    "SSH_KEY",
+    "IOS_KEYCHAIN",
+    "IOS_PROVISION_PROFILES",
+    "SSH_PUBLIC_KEY",
+    "GPG_KEY",
+    "P12",
 ]
 
 
@@ -2690,7 +2828,7 @@ class AddVariableInObjectRequestWritable(BaseModel):
     )
     run_only_settable: Optional[bool] = Field(
         default=None,
-        description="Available only if `type=VAR`. If set to `true` the variable value can be set by Buddy actions only for execution time",
+        description="Available only if `type=VAR`. Requires `settable=true`. If set to `true` the variable value can be set by Buddy actions only for execution time",
     )
     encrypted: Optional[bool] = Field(
         default=None, description="If set to `true` the variable value will be encrypted and hidden"
@@ -2699,15 +2837,15 @@ class AddVariableInObjectRequestWritable(BaseModel):
     defaults: Optional[str] = Field(default=None, description="Default value for the variable")
     file_path: Optional[str] = Field(
         default=None,
-        description="Specifies where to copy the file on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="Specifies where to copy the file on each run. Required if `file_place` is `CONTAINER`, and must start with `/` or `~`",
     )
     file_chmod: Optional[str] = Field(
         default=None,
-        description="File permission set on copy to a container on each run. Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`",
+        description="File permission set on copy to a container on each run. Required if `file_place` is `CONTAINER`",
     )
     file_place: Optional[AddVariableInObjectRequestWritableFilePlace] = Field(
         default=None,
-        description="Set if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run",
+        description="Required if `type` is `FILE`, `SSH_KEY`, `SSH_PUBLIC_KEY`, `IOS_KEYCHAIN`, or `IOS_PROVISION_PROFILES`, unless the variable is sandbox-scoped. If it's `NONE`, the variable can be used as a parameter in an action. For `CONTAINER`, the given key is additionally copied to an action container on each run and both `file_path` and `file_chmod` are required",
     )
     password: Optional[str] = Field(default=None, description="Password for certificates")
     passphrase: Optional[str] = Field(default=None, description="Passphrase for encrypted SSH keys")
@@ -2719,12 +2857,32 @@ class AddVariableInObjectRequestWritable(BaseModel):
         default=None,
         description="Set to `true` to disable the variable. Disabled variables are not injected anywhere",
     )
+    pipelines_access_level: Optional[AddVariableInObjectRequestWritablePipelinesAccessLevel] = (
+        Field(
+            default=None,
+            description="Default access level for pipelines when no rule in `allowedPipelines` matches. Default: `USE_ONLY`. Only valid for workspace- and project-scoped variables.",
+        )
+    )
+    sandboxes_access_level: Optional[AddVariableInObjectRequestWritableSandboxesAccessLevel] = (
+        Field(
+            default=None,
+            description="Default access level for sandboxes when no rule in `allowedSandboxes` matches. Default: `DENIED`. Only valid for workspace- and project-scoped variables.",
+        )
+    )
+    allowed_pipelines: Optional[list[AllowedPipelineView]] = Field(
+        default=None,
+        description="Rules that allow or deny access to this variable from specific pipelines or actions. Send an empty array to clear all rules.",
+    )
+    allowed_sandboxes: Optional[list[AllowedSandboxView]] = Field(
+        default=None,
+        description="Rules that allow or deny access to this variable from specific sandboxes. Send an empty array to clear all rules.",
+    )
     note: Optional[str] = Field(default=None, description="Note for this resource")
     agent_note: Optional[str] = Field(
         default=None, description="YAML note for AI agents operating on this resource"
     )
     type: AddVariableInObjectRequestWritableType = Field(
-        ..., description="The type of the added variable"
+        ..., description="The type of the added variable. Defaults to `VAR` when not set"
     )
 
 
@@ -2816,6 +2974,7 @@ class SandboxResponseWritable(BaseModel):
     agent_note: Optional[str] = Field(
         default=None, description="YAML note for AI agents operating on this resource"
     )
+    create_date: Optional[datetime] = Field(default=None, description="Sandbox creation date")
     variables: Optional[list[EnvironmentVariableView]] = Field(
         default=None, description="The environment variables of the sandbox"
     )
@@ -2852,6 +3011,10 @@ class CreateFromSnapshotRequestWritable(BaseModel):
     resources: Optional[CreateFromSnapshotRequestWritableResources] = Field(
         default=None, description="The resource configuration of the sandbox (CPU x RAM)"
     )
+    timeout: Optional[int] = Field(
+        default=None,
+        description="The timeout in seconds after which the sandbox will be automatically stopped",
+    )
     first_boot_commands: Optional[str] = Field(
         default=None, description="The commands to run during first boot of the sandbox"
     )
@@ -2867,7 +3030,7 @@ class CreateFromSnapshotRequestWritable(BaseModel):
     endpoints: Optional[list[TunnelViewWritable]] = Field(
         default=None, description="The tunnel endpoints of the sandbox"
     )
-    variables: Optional[list[EnvironmentVariableView]] = Field(
+    variables: Optional[list[AddVariableInObjectRequestWritable]] = Field(
         default=None, description="The environment variables of the sandbox"
     )
     scope: Optional[Literal["PROJECT", "ENVIRONMENT", "WORKSPACE"]] = Field(
@@ -3142,6 +3305,7 @@ class UpdateSandboxRequestWritable(BaseModel):
 class WorkspaceMemberViewWritable(BaseModel):
     id: Optional[int] = Field(default=None, description="The ID of the user")
     name: Optional[str] = Field(default=None, description="The name of the user")
+    username: Optional[str] = Field(default=None, description="The unique username of the user")
     avatar_url: Optional[str] = Field(default=None, description="The avatar URL of the user")
     email: Optional[str] = Field(default=None, description="The email address of the user")
     admin: Optional[bool] = Field(default=None, description="Whether the user has admin privileges")
@@ -3186,6 +3350,9 @@ class IdsViewWritable(BaseModel):
     route_id: Optional[str] = Field(default=None, description="The ID of the route")
     agent_id: Optional[str] = Field(default=None, description="The ID of the tunnel agent")
     tunnel_id: Optional[str] = Field(default=None, description="The ID of the tunnel")
+    integration_id: Optional[str] = Field(
+        default=None, description="The hash ID of the integration"
+    )
 
 
 SsoViewWritableType: TypeAlias = Literal["SAML", "OIDC"]
@@ -3288,6 +3455,7 @@ PipelineEventViewType: TypeAlias = Literal[
     "SANDBOX_TIMED_OUT",
     "SENTRY",
     "CLICKUP",
+    "UT_SESSION_ENDED",
 ]
 
 
@@ -3303,10 +3471,11 @@ class PipelineEventView(BaseModel):
     )
     events: Optional[list[str]] = Field(
         default=None,
-        description="The list of pull request events that trigger the pipeline. Examples: `opened`, `reopened`, `synchronize`",
+        description="The list of pull request events that trigger the pipeline. The accepted values depend on the repository provider, each provider uses its own native event types. For Buddy-hosted repositories the supported (and validated) types are: `OPENED`, `REOPENED`, `SYNCHRONIZED`, `CLOSED`, `MERGED`, `READY_FOR_REVIEW`. For repositories integrated with an external provider (e.g. GitHub) the provider's native events are taken as-is and are not validated, e.g. `opened`, `reopened`, `synchronize`",
     )
     branches: Optional[list[str]] = Field(
-        default=None, description="The list of branches for pull request events"
+        default=None,
+        description="The list of branches for pull request events; for type `UT_SESSION_ENDED` it filters by the session branch (wildcards supported), empty means all branches",
     )
     artifacts: Optional[list[PipelineArtifactContextView]] = Field(
         default=None, description="The list of artifacts that trigger the pipeline"
@@ -3355,10 +3524,6 @@ class PipelineEventView(BaseModel):
         default=None,
         description="The list of Sentry issue levels that trigger the pipeline e.g., `error`, `fatal`; empty means all levels (type `SENTRY`)",
     )
-    statuses: Optional[list[str]] = Field(
-        default=None,
-        description="The list of Sentry issue statuses that trigger the pipeline e.g., `unresolved`; empty means all statuses (type `SENTRY`)",
-    )
     substatuses: Optional[list[str]] = Field(
         default=None,
         description="The list of Sentry issue substatuses that trigger the pipeline e.g., `new`, `regressed`; empty means all substatuses (type `SENTRY`)",
@@ -3406,6 +3571,14 @@ class PipelineEventView(BaseModel):
     include_subtasks: Optional[bool] = Field(
         default=None,
         description="Whether to include subtasks; `true` (default) matches parent tasks and subtasks, `false` matches only top-level tasks (type `CLICKUP`)",
+    )
+    suites: Optional[list[str]] = Field(
+        default=None,
+        description="The list of unit test suite identifiers (wildcards supported, e.g. `integration-*`) that trigger the pipeline; empty means all suites (type `UT_SESSION_ENDED`)",
+    )
+    statuses: Optional[list[str]] = Field(
+        default=None,
+        description="The list of statuses that trigger the pipeline (type `SENTRY`, `UT_SESSION_ENDED`)",
     )
 
 
@@ -3655,6 +3828,12 @@ TargetPostgresqlView: TypeAlias = Any
 TargetRdsMssqlView: TypeAlias = Any
 
 
+TargetRdsMysqlView: TypeAlias = Any
+
+
+TargetRdsPostgresqlView: TypeAlias = Any
+
+
 TargetSshView: TypeAlias = Any
 
 
@@ -3727,6 +3906,7 @@ IntegrationViewType: TypeAlias = Literal[
     "OPENCODE",
     "CLICKUP",
     "GROK",
+    "TYPESAFE",
 ]
 
 
@@ -3833,6 +4013,7 @@ PipelineEventViewWritableType: TypeAlias = Literal[
     "SANDBOX_TIMED_OUT",
     "SENTRY",
     "CLICKUP",
+    "UT_SESSION_ENDED",
 ]
 
 
@@ -3848,10 +4029,11 @@ class PipelineEventViewWritable(BaseModel):
     )
     events: Optional[list[str]] = Field(
         default=None,
-        description="The list of pull request events that trigger the pipeline. Examples: `opened`, `reopened`, `synchronize`",
+        description="The list of pull request events that trigger the pipeline. The accepted values depend on the repository provider, each provider uses its own native event types. For Buddy-hosted repositories the supported (and validated) types are: `OPENED`, `REOPENED`, `SYNCHRONIZED`, `CLOSED`, `MERGED`, `READY_FOR_REVIEW`. For repositories integrated with an external provider (e.g. GitHub) the provider's native events are taken as-is and are not validated, e.g. `opened`, `reopened`, `synchronize`",
     )
     branches: Optional[list[str]] = Field(
-        default=None, description="The list of branches for pull request events"
+        default=None,
+        description="The list of branches for pull request events; for type `UT_SESSION_ENDED` it filters by the session branch (wildcards supported), empty means all branches",
     )
     artifacts: Optional[list[PipelineArtifactContextView]] = Field(
         default=None, description="The list of artifacts that trigger the pipeline"
@@ -3900,10 +4082,6 @@ class PipelineEventViewWritable(BaseModel):
         default=None,
         description="The list of Sentry issue levels that trigger the pipeline e.g., `error`, `fatal`; empty means all levels (type `SENTRY`)",
     )
-    statuses: Optional[list[str]] = Field(
-        default=None,
-        description="The list of Sentry issue statuses that trigger the pipeline e.g., `unresolved`; empty means all statuses (type `SENTRY`)",
-    )
     substatuses: Optional[list[str]] = Field(
         default=None,
         description="The list of Sentry issue substatuses that trigger the pipeline e.g., `new`, `regressed`; empty means all substatuses (type `SENTRY`)",
@@ -3951,6 +4129,14 @@ class PipelineEventViewWritable(BaseModel):
     include_subtasks: Optional[bool] = Field(
         default=None,
         description="Whether to include subtasks; `true` (default) matches parent tasks and subtasks, `false` matches only top-level tasks (type `CLICKUP`)",
+    )
+    suites: Optional[list[str]] = Field(
+        default=None,
+        description="The list of unit test suite identifiers (wildcards supported, e.g. `integration-*`) that trigger the pipeline; empty means all suites (type `UT_SESSION_ENDED`)",
+    )
+    statuses: Optional[list[str]] = Field(
+        default=None,
+        description="The list of statuses that trigger the pipeline (type `SENTRY`, `UT_SESSION_ENDED`)",
     )
 
 
@@ -4196,6 +4382,12 @@ TargetPostgresqlViewWritable: TypeAlias = Any
 TargetRdsMssqlViewWritable: TypeAlias = Any
 
 
+TargetRdsMysqlViewWritable: TypeAlias = Any
+
+
+TargetRdsPostgresqlViewWritable: TypeAlias = Any
+
+
 TargetSshViewWritable: TypeAlias = Any
 
 
@@ -4268,6 +4460,7 @@ IntegrationViewWritableType: TypeAlias = Literal[
     "OPENCODE",
     "CLICKUP",
     "GROK",
+    "TYPESAFE",
 ]
 
 
@@ -4415,6 +4608,10 @@ class GetIdentifiersQuery(BaseModel):
     target: Optional[str] = Field(
         default=None,
         description="The human-readable ID or the ID of the target. The human-readable ID is resolved first. Resolved against the given pipeline, environment or project, then the workspace.",
+    )
+    integration: Optional[str] = Field(
+        default=None,
+        description="The human-readable ID of the integration. Resolved against the given environment, then its project or the given project, then the workspace. Without project and environment only workspace integrations are matched.",
     )
     route_subdomain: Optional[str] = Field(
         default=None,
@@ -4677,6 +4874,17 @@ class GetSandboxCommandsPath(BaseModel):
     sandbox_id: str = Field(..., description="The ID of the sandbox")
 
 
+class GetSandboxCommandsQuery(BaseModel):
+    cursor: Optional[str] = Field(
+        default=None,
+        description="Returns only commands older than the command with this ID. Pass the ID of the last command from the previous page to fetch the next one.",
+    )
+    limit: Optional[int] = Field(
+        default=None,
+        description="Maximum number of commands to return (most recent first). Default: 50, max: 200.",
+    )
+
+
 class GetSandboxCommandsResponse(RootModel[SandboxCommandsView]):
     root: SandboxCommandsView
 
@@ -4820,6 +5028,28 @@ class DownloadSandboxContentResponse(RootModel[bytes]):
     """File download"""
 
     root: bytes = Field(..., description="File download")
+
+
+class ExecSandboxCommandBody(RootModel[ExecuteSandboxCommandRequest]):
+    root: ExecuteSandboxCommandRequest
+
+
+class ExecSandboxCommandPath(BaseModel):
+    workspace_domain: str = Field(..., description="The human-readable ID of the workspace")
+    sandbox_id: str = Field(..., description="The ID of the sandbox")
+
+
+class ExecSandboxCommandResponse(RootModel[SandboxCommandResultView]):
+    root: SandboxCommandResultView
+
+
+class RecreateSandboxPath(BaseModel):
+    workspace_domain: str = Field(..., description="The human-readable ID of the workspace")
+    sandbox_id: str = Field(..., description="The ID of the sandbox")
+
+
+class RecreateSandboxResponse(RootModel[SandboxResponse]):
+    root: SandboxResponse
 
 
 class RestartSandboxPath(BaseModel):
@@ -4990,7 +5220,7 @@ class GetIntegrationsPath(BaseModel):
 
 class GetIntegrationsQuery(BaseModel):
     project_name: Optional[str] = Field(default=None, description="The name of the project")
-    environment_id: Optional[int] = Field(default=None, description="The ID of the environment")
+    environment_id: Optional[str] = Field(default=None, description="The ID of the environment")
 
 
 class GetIntegrationsResponse(RootModel[IntegrationsView]):
